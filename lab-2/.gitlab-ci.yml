@@ -1,0 +1,67 @@
+stages:
+  - test
+  - build
+  - deploy
+
+test:
+  stage: test
+  image: gradle:7.6.0-jdk17-alpine
+  script:
+    - gradle test -p app/
+  artifacts:
+    when: always
+    reports:
+      junit: app/build/test-results/test/*.xml
+
+test_build:
+  stage: test
+  needs:
+    - test
+  image: gradle:7.6.0-jdk17-alpine
+  script:
+    - gradle build -p app/
+
+build_app:
+  only:
+    - main
+  stage: build
+  needs:
+    - test_build
+  image: gradle:7.6.0-jdk17-alpine
+  script:
+    - gradle build -p app/
+  artifacts:
+    paths:
+      - app/build/libs
+
+build_image:
+  only:
+    - main
+  stage: build
+  needs:
+    - build_app
+  image: docker:23.0-rc-git
+  services:
+    - docker:23.0-rc-dind
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
+  before_script:
+    - docker login -u $DOCKER_USER -p $DOCKER_PASS
+  script:
+    - docker build app/. -t sesaquecruz/cicd-lab2-app:1.0
+    - docker push sesaquecruz/cicd-lab2-app:1.0
+
+deploy:
+  only:
+    - main
+  stage: deploy
+  needs:
+    - build_image
+  before_script:
+    - chmod 400 $SSH_KEY
+    - ssh -o StrictHostKeyChecking=no -i $SSH_KEY $SSH_USER@$SSH_HOST "rm -rf k8s"
+    - scp -o StrictHostKeyChecking=no -i $SSH_KEY -r k8s $SSH_USER@$SSH_HOST:~
+  script:
+    - ssh -o StrictHostKeyChecking=no -i $SSH_KEY $SSH_USER@$SSH_HOST "cd k8s && chmod +x script.sh && ./script.sh"
+  after_script:
+    - ssh -o StrictHostKeyChecking=no -i $SSH_KEY $SSH_USER@$SSH_HOST "rm -rf k8s"
