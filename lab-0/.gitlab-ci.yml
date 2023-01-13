@@ -1,0 +1,46 @@
+stages:
+  - test
+  - build
+  - deploy
+
+test:
+  stage: test
+  image: gradle:7.6.0-jdk17-alpine
+  script:
+    - gradle test -p app/
+
+build:
+  stage: build
+  needs:
+    - test
+  image: gradle:7.6.0-jdk17-alpine
+  script:
+    - gradle build -p app/
+
+deploy_build:
+  stage: deploy
+  only:
+    - main
+  image: gradle:7.6.0-jdk17-alpine
+  script:
+    - gradle build -p app/
+  artifacts:
+    paths:
+      - app/app/build/libs
+
+deploy_image:
+  stage: deploy
+  only:
+    - main
+  needs:
+    - deploy_build
+  image: docker:23.0-rc-git
+  services:
+    - docker:23.0-rc-dind
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
+  before_script:
+    - docker login -u $DOCKER_USER -p $DOCKER_PASS
+  script:
+    - docker build app/. -t sesaquecruz/cicd-lab0-app:1.0
+    - docker push sesaquecruz/cicd-lab0-app:1.0
