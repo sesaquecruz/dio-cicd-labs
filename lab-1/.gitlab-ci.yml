@@ -1,0 +1,20 @@
+stages:
+  - build
+  - deploy
+
+build:
+  stage: build
+  tags:
+    - gcp
+  script:
+    - docker build app/. -t sesaquecruz/cicd-lab1-app:1.0
+    - docker push sesaquecruz/cicd-lab1-app:1.0
+
+deploy:
+  stage: deploy
+  needs:
+    - build
+  tags:
+    - gcp
+  script:
+    - docker run -dti -p 80:80 --name webserver sesaquecruz/cicd-lab1-app:1.0
